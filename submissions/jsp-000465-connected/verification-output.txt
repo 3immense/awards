@@ -1,0 +1,30 @@
+✔ [8655/8656] Built CompactnessAndDegeneracy (63s)
+Build completed successfully (8656 jobs).
+CompactnessConjecture.quantitativeCompactnessCounterexample :
+  ∃ family c C,
+    family.Nonempty ∧
+      (∀ forbidden ∈ family, forbidden.graph.Connected ∧ forbidden.graph.IsBipartite ∧ ¬forbidden.graph.IsAcyclic) ∧
+        0 < c ∧
+          0 < C ∧
+            CompactnessConjecture.UniformMemberLower family c ∧
+              (∀ (n : ℕ) (host : SimpleGraph (Fin n)),
+                  CompactnessConjecture.FamilyFree family host → ↑host.edgeFinset.card ^ 16 ≤ C * ↑n ^ 21) ∧
+                (∀ (n : ℕ), ↑(CompactnessConjecture.familyExtremal family n) ^ 16 ≤ C * ↑n ^ 21) ∧
+                  0 < 1 / 48 ∧
+                    21 / 16 = 4 / 3 - 1 / 48 ∧
+                      ¬CompactnessConjecture.IsCompactFamily family ∧
+                        ¬CompactnessConjecture.CompactnessConjectureStatement
+CompactnessConjecture.compactnessCounterexample_bigO :
+  ∃ family c,
+    family.Nonempty ∧
+      (∀ forbidden ∈ family, forbidden.graph.Connected ∧ forbidden.graph.IsBipartite ∧ ¬forbidden.graph.IsAcyclic) ∧
+        0 < c ∧
+          CompactnessConjecture.UniformMemberLower family c ∧
+            ((fun n => ↑(CompactnessConjecture.familyExtremal family n)) =O[Filter.atTop] fun n =>
+                ↑n ^ (4 / 3 - 1 / 48)) ∧
+              ¬CompactnessConjecture.IsCompactFamily family ∧ ¬CompactnessConjecture.CompactnessConjectureStatement
+CompactnessConjecture.not_erdos_180 : ¬CompactnessConjecture.CompactnessConjectureStatement
+'CompactnessConjecture.quantitativeCompactnessCounterexample' depends on axioms: [propext, Classical.choice, Quot.sound]
+'CompactnessConjecture.compactnessCounterexample_bigO' depends on axioms: [propext, Classical.choice, Quot.sound]
+'CompactnessConjecture.not_erdos_180' depends on axioms: [propext, Classical.choice, Quot.sound]
+PASS: complete source builds and all target theorems pass the transitive axiom audit

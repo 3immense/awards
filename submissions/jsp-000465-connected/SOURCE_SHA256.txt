@@ -1,0 +1,1 @@
+17637d0697b9657f221dc1aa734cb1d19765b50edbfdda1dc3446874735fbd81  submissions/jsp-000465-connected/lean/CompactnessAndDegeneracy.lean

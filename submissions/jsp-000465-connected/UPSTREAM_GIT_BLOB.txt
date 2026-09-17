@@ -1,0 +1,1 @@
+Upstream Git blob SHA for CompactnessAndDegeneracy.lean: 0e973d50014e8c800af597ef699ef29b81e42fc6

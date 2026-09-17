@@ -1,0 +1,12 @@
+import CompactnessAndDegeneracy
+
+#check CompactnessConjecture.quantitativeCompactnessCounterexample
+#check CompactnessConjecture.compactnessCounterexample_bigO
+#check CompactnessConjecture.not_erdos_180
+
+example : ¬ CompactnessConjecture.CompactnessConjectureStatement :=
+  CompactnessConjecture.not_erdos_180
+
+#print axioms CompactnessConjecture.quantitativeCompactnessCounterexample
+#print axioms CompactnessConjecture.compactnessCounterexample_bigO
+#print axioms CompactnessConjecture.not_erdos_180
