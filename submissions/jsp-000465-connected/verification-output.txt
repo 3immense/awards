@@ -1,4 +1,4 @@
-✔ [8655/8656] Built CompactnessAndDegeneracy (63s)
+✔ [8655/8656] Built CompactnessAndDegeneracy (82s)
 Build completed successfully (8656 jobs).
 CompactnessConjecture.quantitativeCompactnessCounterexample :
   ∃ family c C,
