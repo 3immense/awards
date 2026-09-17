@@ -1,0 +1,94 @@
+name: Verify JSP-000465 Connected Lean Proof
+
+on:
+  push:
+    branches:
+      - verify/jsp465-connected
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout pinned OpenAI formalization
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: openai/ten-proofs
+          ref: 94bc0feb6a9ff12c7d31d6de640a725c9d43d2b6
+          path: ten-proofs
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Show pinned source commit
+        run: |
+          cd ten-proofs
+          test "$(git rev-parse HEAD)" = "94bc0feb6a9ff12c7d31d6de640a725c9d43d2b6"
+          cat lean-toolchain
+          cat lakefile.toml
+
+      - name: Install elan
+        run: |
+          curl -sSf https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+
+      - name: Fetch Mathlib cache
+        run: |
+          cd ten-proofs
+          lake exe cache get
+
+      - name: Build the complete compactness formalization
+        run: |
+          cd ten-proofs
+          lake build CompactnessAndDegeneracy
+
+      - name: Reject sorry/admit in the certificate source
+        run: |
+          cd ten-proofs
+          if grep -nE '(^|[^A-Za-z])(sorry|admit)([^A-Za-z]|$)' CompactnessAndDegeneracy.lean; then
+            echo "Unexpected sorry/admit in CompactnessAndDegeneracy.lean" >&2
+            exit 1
+          fi
+
+      - name: Audit theorem statements and transitive axioms
+        run: |
+          cd ten-proofs
+          cat > JSP465Audit.lean <<'EOF'
+          import CompactnessAndDegeneracy
+
+          #check CompactnessConjecture.quantitativeCompactnessCounterexample
+          #check CompactnessConjecture.compactnessCounterexample_bigO
+          #check CompactnessConjecture.not_erdos_180
+
+          #print axioms CompactnessConjecture.quantitativeCompactnessCounterexample
+          #print axioms CompactnessConjecture.compactnessCounterexample_bigO
+          #print axioms CompactnessConjecture.not_erdos_180
+          EOF
+          lake env lean JSP465Audit.lean | tee jsp465-audit.txt
+          if grep -q 'sorryAx' jsp465-audit.txt; then
+            echo "FAIL: final theorem depends on sorryAx" >&2
+            exit 1
+          fi
+          if grep -q 'Lean.ofReduceBool' jsp465-audit.txt; then
+            echo "FAIL: unexpected native/reduction axiom" >&2
+            exit 1
+          fi
+
+      - name: Confirm official metadata says zero sorries
+        run: |
+          cd ten-proofs
+          python3 - <<'PY'
+          from pathlib import Path
+          text = Path('formalization.yaml').read_text(encoding='utf-8')
+          name = 'CompactnessConjecture.quantitativeCompactnessCounterexample'
+          i = text.find(name)
+          if i < 0:
+              raise SystemExit('Missing quantitativeCompactnessCounterexample in formalization.yaml')
+          window = text[i:i+600]
+          print(window)
+          if 'sorry_count: 0' not in window:
+              raise SystemExit('Official metadata does not report sorry_count: 0 for target theorem')
+          PY
