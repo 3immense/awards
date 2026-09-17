@@ -1,0 +1,213 @@
+name: Bootstrap complete JSP-000465 Lean submission
+
+on:
+  push:
+    branches:
+      - submission/jsp-000465-connected-complete
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  vendor-and-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      UPSTREAM_REPO: openai/ten-proofs
+      UPSTREAM_COMMIT: 94bc0feb6a9ff12c7d31d6de640a725c9d43d2b6
+      ROOT: submissions/jsp-000465-connected
+      LEAN_DIR: submissions/jsp-000465-connected/lean
+    steps:
+      - name: Checkout this branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Vendor pinned complete Lean source and attribution files
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$LEAN_DIR" "$ROOT/reference"
+          base="https://raw.githubusercontent.com/${UPSTREAM_REPO}/${UPSTREAM_COMMIT}"
+          curl -fL --retry 3 "$base/CompactnessAndDegeneracy.lean" -o "$LEAN_DIR/CompactnessAndDegeneracy.lean"
+          curl -fL --retry 3 "$base/LICENSE" -o "$LEAN_DIR/UPSTREAM-LICENSE"
+          curl -fL --retry 3 "$base/formalization.yaml" -o "$ROOT/reference/upstream-formalization.yaml"
+          curl -fL --retry 3 "$base/ComparatorChallenges/J_CompactnessConjecture.json" -o "$ROOT/reference/J_CompactnessConjecture.json"
+          printf '%s\n' 'leanprover/lean4:v4.32.0' > "$LEAN_DIR/lean-toolchain"
+          cat > "$LEAN_DIR/lakefile.toml" <<'EOF'
+          name = "jsp000465_connected"
+          version = "0.1.0"
+          defaultTargets = ["CompactnessAndDegeneracy"]
+
+          [[require]]
+          name = "mathlib"
+          scope = "leanprover-community"
+          rev = "v4.32.0"
+
+          [[lean_lib]]
+          name = "CompactnessAndDegeneracy"
+          EOF
+
+          cat > "$LEAN_DIR/JSP465Audit.lean" <<'EOF'
+          import CompactnessAndDegeneracy
+
+          #check CompactnessConjecture.quantitativeCompactnessCounterexample
+          #check CompactnessConjecture.compactnessCounterexample_bigO
+          #check CompactnessConjecture.not_erdos_180
+
+          example : ¬ CompactnessConjecture.CompactnessConjectureStatement :=
+            CompactnessConjecture.not_erdos_180
+
+          #print axioms CompactnessConjecture.quantitativeCompactnessCounterexample
+          #print axioms CompactnessConjecture.compactnessCounterexample_bigO
+          #print axioms CompactnessConjecture.not_erdos_180
+          EOF
+
+          cat > "$LEAN_DIR/verify.py" <<'EOF'
+          """Reproduce and audit the vendored JSP-000465 Lean certificate."""
+
+          import re
+          import subprocess
+          from pathlib import Path
+
+          ROOT = Path(__file__).resolve().parent
+          THEOREMS = [
+              "CompactnessConjecture.quantitativeCompactnessCounterexample",
+              "CompactnessConjecture.compactnessCounterexample_bigO",
+              "CompactnessConjecture.not_erdos_180",
+          ]
+          ALLOWED = {"propext", "Classical.choice", "Quot.sound"}
+
+          def run(cmd):
+              p = subprocess.run(cmd, cwd=ROOT, text=True, encoding="utf-8",
+                                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+              print(p.stdout, end="")
+              if p.returncode:
+                  raise SystemExit(p.returncode)
+              return p.stdout
+
+          def main():
+              source = (ROOT / "CompactnessAndDegeneracy.lean").read_text(encoding="utf-8")
+              if re.search(r"(?<![A-Za-z])(sorry|admit)(?![A-Za-z])", source):
+                  raise SystemExit("Unexpected sorry/admit token in certificate source")
+
+              run(["lake", "build", "CompactnessAndDegeneracy"])
+              output = run(["lake", "env", "lean", "JSP465Audit.lean"])
+
+              for name in THEOREMS:
+                  pattern = rf"'{re.escape(name)}' depends on axioms:\s*\[([^\]]*)\]"
+                  m = re.search(pattern, output)
+                  if not m:
+                      raise SystemExit(f"Missing axiom audit for {name}")
+                  axioms = {x.strip() for x in m.group(1).split(",") if x.strip()}
+                  unexpected = axioms - ALLOWED
+                  if unexpected:
+                      raise SystemExit(f"Unexpected axioms for {name}: {sorted(unexpected)}")
+                  if "sorryAx" in axioms:
+                      raise SystemExit(f"{name} depends on sorryAx")
+
+              print("PASS: complete source builds and all target theorems pass the transitive axiom audit")
+
+          if __name__ == "__main__":
+              main()
+          EOF
+
+          cat > "$ROOT/README.md" <<EOF
+          # JSP-000465 connected-bipartite Lean certificate
+
+          This directory vendors a complete Lean 4 certificate for JSP-000465, the Erdős–Simonovits compactness counterexample for a finite family of connected bipartite cyclic graphs.
+
+          ## Provenance and attribution
+
+          - Upstream project: \`openai/ten-proofs\`
+          - Pinned upstream commit: \`${UPSTREAM_COMMIT}\`
+          - Upstream project author: OpenAI
+          - Upstream license: Apache-2.0
+          - Vendored proof file: \`lean/CompactnessAndDegeneracy.lean\`
+          - Main declaration: \`CompactnessConjecture.quantitativeCompactnessCounterexample\`
+          - Final contradiction: \`CompactnessConjecture.not_erdos_180\`
+
+          This package is an attributed reproduction of the published OpenAI formalization. It does not claim that the repository owner authored the upstream Lean proof.
+
+          ## Statement correspondence
+
+          The formalization defines the compactness statement for a finite forbidden family and proves a counterexample family for which every forbidden graph is connected, bipartite, and cyclic. It provides the quantitative separation used to refute constant-factor reduction to any single member and derives \`¬ CompactnessConjectureStatement\`.
+
+          ## Reproduction
+
+          
+          ```bash
+          cd submissions/jsp-000465-connected/lean
+          lake exe cache get
+          python3 verify.py
+          ```
+
+          The verification script requires the three target theorems to depend only on \`propext\`, \`Classical.choice\`, and \`Quot.sound\`, and rejects \`sorry\`/ \`admit\` in the certificate source.
+
+          ## Prize-record note
+
+          This directory supplies pinned formal evidence and reproducibility material. The Justin Sun Prize maintainers decide problem-bank Lean status, attribution, candidate status, awards, and payment eligibility.
+          EOF
+
+          cat > "$ROOT/verification.md" <<EOF
+          # Verification record
+
+          ## Source pin
+
+          - Repository: \`${UPSTREAM_REPO}\`
+          - Commit: \`${UPSTREAM_COMMIT}\`
+          - Source: \`CompactnessAndDegeneracy.lean\`
+          - Lean: \`v4.32.0\`
+          - Mathlib: \`v4.32.0\`
+
+          ## Target declarations
+
+          1. \`CompactnessConjecture.quantitativeCompactnessCounterexample\`
+          2. \`CompactnessConjecture.compactnessCounterexample_bigO\`
+          3. \`CompactnessConjecture.not_erdos_180\`
+
+          ## Checks
+
+          - build the vendored source with Lean kernel checking;
+          - reject \`sorry\` and \`admit\` tokens in the vendored certificate source;
+          - type-check an explicit term of \`¬ CompactnessConjecture.CompactnessConjectureStatement\`;
+          - run \`#print axioms\` on all target declarations;
+          - reject every transitive axiom outside \`propext\`, \`Classical.choice\`, and \`Quot.sound\`.
+
+          The generated \`verification-output.txt\` records the actual reproduction output from GitHub Actions.
+          EOF
+
+          sha256sum "$LEAN_DIR/CompactnessAndDegeneracy.lean" > "$ROOT/SOURCE_SHA256.txt"
+
+      - name: Install elan
+        run: |
+          curl -sSf https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+
+      - name: Fetch Mathlib cache
+        working-directory: submissions/jsp-000465-connected/lean
+        run: lake exe cache get
+
+      - name: Build and audit complete vendored proof
+        working-directory: submissions/jsp-000465-connected/lean
+        run: python3 verify.py | tee ../verification-output.txt
+
+      - name: Record exact upstream Git blob identity
+        run: |
+          printf '%s\n' 'Upstream Git blob SHA for CompactnessAndDegeneracy.lean: 0e973d50014e8c800af597ef699ef29b81e42fc6' > "$ROOT/UPSTREAM_GIT_BLOB.txt"
+
+      - name: Commit verified vendored package
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add "$ROOT"
+          if git diff --cached --quiet; then
+            echo "Vendored package already matches the pinned verified source."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Vendor complete verified JSP-000465 Lean certificate"
+          git push origin HEAD:submission/jsp-000465-connected-complete
